@@ -619,6 +619,15 @@ body::before{position:fixed;top:0;left:0;right:0;z-index:40}
 .drow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .kids{display:flex;flex-wrap:wrap;gap:6px}.kids span{background:var(--hi-l);border:1.5px solid #2A2620;border-radius:99px;padding:4px 10px;font-size:13px}
 .soon{opacity:.6}
+.nb-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.nb-head h3{margin:0;flex:1}.nb-head h3 small{font-family:Pretendard;font-size:12.5px;color:var(--muted);font-weight:600;margin-left:6px}
+.notice{border:2px solid #2A2620;border-radius:12px;padding:10px 14px;margin-top:10px;background:#fff}
+.notice.imp{border-color:#E8382F;background:#FFF1F0}.notice.off{opacity:.55;border-style:dashed}
+.notice .nh{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.notice .nh b{font-size:15.5px;flex:1}
+.notice .nh small{color:var(--muted);font-weight:700}.notice .badge2{font-size:11.5px;font-weight:800;border:1.5px solid #2A2620;border-radius:99px;padding:1px 8px;background:var(--hi-l)}
+.notice .badge2.r{background:#E8382F;color:#fff;border-color:#E8382F}
+.notice p{margin:6px 0 0;white-space:pre-wrap;line-height:1.55;font-size:14px}
+.notice .nedit{margin-left:auto}
+#noticeForm textarea{width:100%;font:inherit;border:2px solid #2A2620;border-radius:10px;padding:10px}
 .photo img{width:100%;height:100%;object-fit:cover;border-radius:11px;cursor:zoom-in}
 .photo.has{border-style:solid;background:#fff;padding:0;overflow:hidden}
 .driver a{color:inherit;font-weight:800}
@@ -685,7 +694,8 @@ html.season-sum .vac-banner{display:flex;align-items:center;gap:10px;margin:0 0 
     <div class="capbox"><h2>하교 (오후)</h2><div class="capgrid" id="capPm"></div></div>
   </section>
 
-  <div class="box"><h3>📢 운행 안내</h3><ul class="info" id="homeInfo"></ul></div>
+  <div class="box notice-box"><div class="nb-head"><h3>📢 운행 안내 <small>학부모 앱에도 바로 보입니다</small></h3><button class="btn primary info-edit" type="button" id="noticeNew">✏️ 안내 쓰기</button></div><div id="noticeList"></div></div>
+  <div class="box"><h3>🚌 운행 정보</h3><ul class="info" id="homeInfo"></ul></div>
   </div>
   <div class="view" id="v-students" hidden>
   <div class="stu-tools" id="stuTools"></div>
@@ -858,6 +868,22 @@ html.season-sum .vac-banner{display:flex;align-items:center;gap:10px;margin:0 0 
       <div class="rt-grid" id="routeBody"></div>
       <p class="seat-footnote" style="margin:0">· <em class="rt-plan-tag">예정</em> 표시 시간은 기사님 확인 전 예상 시간입니다. 확정되면 시간표를 고쳐 주세요.<br>· 회색 정류장은 지금 그 운행을 타는 학생이 없는 곳입니다.</p>
     </div>
+  </section>
+</div>
+<div class="modal-back" id="noticeModal" hidden>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="noticeTitleH" style="width:min(640px,100%)">
+    <form id="noticeForm">
+      <div class="modal-head"><div><h2 id="noticeTitleH">📢 운행 안내 쓰기</h2><p class="seat-subtitle">저장하면 직원 화면과 학부모 앱에 바로 보입니다. 학생 이름 같은 개인정보는 쓰지 마세요.</p></div><button class="btn" id="noticeClose" type="button">닫기</button></div>
+      <div class="modal-body"><div class="fields">
+        <div class="field"><label>보여 줄 기간</label><select name="season"><option value="전체">전체 (늘 보임)</option><option value="학기">학기 중</option><option value="방학">❄️ 겨울방학</option><option value="여름">🌿 여름방학</option></select></div>
+        <div class="field"><label>날짜</label><input name="date" type="date"></div>
+        <div class="field full"><label>제목</label><input name="title" type="text" maxlength="100" required placeholder="예: 12월 24일 하교 차량 30분 늦게 출발"></div>
+        <div class="field full"><label>내용</label><textarea name="body" rows="6" maxlength="2000" placeholder="학부모님께 알릴 내용을 적어 주세요."></textarea></div>
+        <label class="chk"><input type="checkbox" name="important"> ⚠ 중요 안내 (맨 위에 빨간색으로)</label>
+        <label class="chk"><input type="checkbox" name="posted" checked> 학부모 앱에 게시</label>
+      </div></div>
+      <div class="modal-foot"><button class="btn danger" type="button" id="noticeDelete">삭제</button><div class="right"><button class="btn" type="button" id="noticeCancel">취소</button><button class="btn primary" type="submit">저장</button></div></div>
+    </form>
   </section>
 </div>
 <div id="printArea" aria-hidden="true"></div>
@@ -2307,6 +2333,42 @@ $("crDriverEdit").onclick=async()=>{
   catch(err){ showToast("저장하지 못했습니다. 잠금을 다시 풀어 주세요."); }
 };
 setTimeout(loadInfo,1500);
+
+// ===== 운행 안내 =====
+let NOTICES=[]; const SEASON_NAME={"전체":"전체","학기":"학기 중","방학":"겨울방학","여름":"여름방학"};
+async function loadNotices(){ try{ NOTICES=await callServer("getNotices",viewCode)||[]; renderNotices(); }catch(e){} }
+function renderNotices(){
+  const el=$("noticeList"); if(!el) return;
+  const list=NOTICES.filter(n=>editUnlocked||n.posted);
+  el.innerHTML=list.length?list.map(n=>`<div class="notice ${n.important?"imp":""} ${n.posted?"":"off"}"><div class="nh">${n.important?'<span class="badge2 r">⚠ 중요</span>':""}<b>${esc(n.title)}</b><span class="badge2">${SEASON_NAME[n.season]||"전체"}</span><small>${esc(n.date)}</small>${n.posted?"":'<span class="badge2">게시 안 함</span>'}${editUnlocked?`<button class="btn info-edit nedit" type="button" data-nid="${esc(n.id)}">✏️ 고치기</button>`:""}</div>${n.body?`<p>${esc(n.body)}</p>`:""}</div>`).join(""):`<p style="color:var(--muted);margin:10px 0 0">아직 운행 안내가 없습니다.${editUnlocked?" ‘안내 쓰기’를 눌러 첫 안내를 써 보세요.":""}</p>`;
+}
+let NOTICE_EDIT=null;
+function openNotice(n){
+  NOTICE_EDIT=n||null; const f=$("noticeForm");
+  f.season.value=n?n.season:(SEASON==="학기"?"전체":SEASON); f.date.value=n?n.date:new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
+  f.title.value=n?n.title:""; f.body.value=n?n.body:""; f.important.checked=!!(n&&n.important); f.posted.checked=n?n.posted:true;
+  $("noticeTitleH").textContent=n?"📢 운행 안내 고치기":"📢 운행 안내 쓰기"; $("noticeDelete").hidden=!n;
+  $("noticeModal").hidden=false; setTimeout(()=>f.title.focus(),30);
+}
+const closeNotice=()=>{ $("noticeModal").hidden=true; NOTICE_EDIT=null; };
+$("noticeNew").onclick=()=>{ if(editUnlocked) openNotice(null); };
+$("noticeList").addEventListener("click",e=>{ const b=e.target.closest("[data-nid]"); if(b&&editUnlocked) openNotice(NOTICES.find(n=>n.id===b.dataset.nid)); });
+$("noticeClose").onclick=closeNotice; $("noticeCancel").onclick=closeNotice;
+$("noticeForm").addEventListener("submit",async e=>{
+  e.preventDefault(); const f=$("noticeForm"), btn=f.querySelector("button[type=submit]");
+  const n={id:NOTICE_EDIT&&NOTICE_EDIT.id, season:f.season.value, date:f.date.value, title:f.title.value.trim(), body:f.body.value.trim(), important:f.important.checked, posted:f.posted.checked};
+  if(!n.title){ showToast("제목을 적어 주세요."); return; }
+  btn.disabled=true; btn.textContent="저장 중…";
+  try{ NOTICES=await callServer("saveNotice",editPw,n); renderNotices(); closeNotice(); showToast(n.posted?"저장했습니다. 학부모 앱에도 바로 보입니다.":"저장했습니다. (학부모 앱에는 게시하지 않음)"); }
+  catch(err){ showToast("저장하지 못했습니다. 잠금을 다시 풀어 주세요."); }
+  finally{ btn.disabled=false; btn.textContent="저장"; }
+});
+$("noticeDelete").onclick=async()=>{
+  if(!NOTICE_EDIT||!confirm(`‘${NOTICE_EDIT.title}’ 안내를 지울까요? 학부모 앱에서도 사라집니다.`)) return;
+  try{ NOTICES=await callServer("deleteNotice",editPw,NOTICE_EDIT.id); renderNotices(); closeNotice(); showToast("안내를 지웠습니다."); }catch(err){ showToast("지우지 못했습니다."); }
+};
+{ const _u3=updateLockUI; updateLockUI=function(){ const o=_u3.apply(this,arguments); renderNotices(); return o; }; }
+setTimeout(loadNotices,1200); setInterval(loadNotices,60000);
 applySeason();
 render();
 updateLockUI();
