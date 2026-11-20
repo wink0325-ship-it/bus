@@ -619,6 +619,12 @@ body::before{position:fixed;top:0;left:0;right:0;z-index:40}
 .drow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .kids{display:flex;flex-wrap:wrap;gap:6px}.kids span{background:var(--hi-l);border:1.5px solid #2A2620;border-radius:99px;padding:4px 10px;font-size:13px}
 .soon{opacity:.6}
+.photo img{width:100%;height:100%;object-fit:cover;border-radius:11px;cursor:zoom-in}
+.photo.has{border-style:solid;background:#fff;padding:0;overflow:hidden}
+.driver a{color:inherit;font-weight:800}
+.stop .sbox small .ok{color:#14804A;font-weight:700}
+.photo-zoom{position:fixed;inset:0;background:#000c;z-index:95;display:grid;place-items:center;padding:20px;cursor:zoom-out}
+.photo-zoom img{max-width:100%;max-height:100%;border-radius:12px;border:3px solid #fff}
 /* 좌석표를 화면 안에 */
 #carSeat .modal{position:static!important;transform:none!important;max-height:none!important;width:100%!important;margin:0!important;box-shadow:4px 4px 0 #2A2620!important}
 #carSeat #closeSeatModal{display:none}
@@ -718,11 +724,11 @@ html.season-sum .vac-banner{display:flex;align-items:center;gap:10px;margin:0 0 
         <span style="color:var(--muted);font-size:13.5px">아이들이 길을 건너지 않도록 등교·하교는 같은 자리에서 타고 내립니다.</span>
         <button class="btn" type="button" id="crPrint" style="margin-left:auto">🖨 등·하교 코스 인쇄</button></div>
       <div class="vtabs" id="crTabs" style="margin:14px 0"></div>
-      <div class="driver" style="margin-bottom:14px"><div class="av">🧑‍✈️</div><div><b id="crDriver">기사님 · 미등록</b><span>연락처 미등록 · 등록하면 휴대폰에서 눌러 바로 전화할 수 있어요</span></div><button class="btn soon" type="button" data-soon>✏️ 기사님 정보</button></div>
+      <div class="driver" style="margin-bottom:14px"><div class="av">🧑‍✈️</div><div id="crDriverTxt"></div><button class="btn info-edit" type="button" id="crDriverEdit">✏️ 기사님 정보</button></div>
       <div class="vgrid"><div><h3 class="sec">🗺 운행 코스</h3><ul class="stops" id="crStops"></ul></div>
         <div class="box" style="box-shadow:none"><h3 id="crStopName"></h3>
-          <div class="photo"><div><span>📷</span>정류장 사진 없음<br><small style="font-weight:600">타는 자리가 보이게 찍은 사진을 올릴 예정입니다</small></div></div>
-          <div class="drow"><button class="btn soon" type="button" data-soon>📍 지도 보기 (미등록)</button><button class="btn soon" type="button" data-soon>📷 사진 올리기</button></div>
+          <div class="photo" id="crPhoto"></div>
+          <div class="drow" id="crStopBtns"></div><input type="file" id="crPhotoFile" accept="image/*" hidden>
           <b style="font-size:14px">이 정류장에서 타는 학생</b><div class="kids" id="crKids" style="margin-top:8px"></div></div></div>
     </div>
     <div id="carSeat" hidden></div>
@@ -1789,7 +1795,7 @@ window.addEventListener("beforeunload",e=>{ if(saving||savePending){ e.preventDe
 let editPw=""; try{ editPw=sessionStorage.getItem("bus2027_pw")||""; }catch(e){}
 let editUnlocked=!!editPw;
 // 수정이 일어나는 곳: 이름(전체 수정), 표의 빠른 수정 칸, 학생 추가·전체 삭제·백업 불러오기, 좌석 옮기기, 미응답 학생 처리
-const LOCKED_TARGETS = "#paperInputBtn, [data-edit], td.quick, #addStudent, #clearAll, #restore, #seatResetRun, #seatVisual [data-seat], #seatOverflow .ov-btn, [data-roster-add], [data-roster-ex], [data-roster-undo]";
+const LOCKED_TARGETS = ".info-edit, #paperInputBtn, [data-edit], td.quick, #addStudent, #clearAll, #restore, #seatResetRun, #seatVisual [data-seat], #seatOverflow .ov-btn, [data-roster-add], [data-roster-ex], [data-roster-undo]";
 let pendingEditTarget=null;
 function updateLockUI(){
   document.documentElement.classList.toggle("edit-locked",!editUnlocked);
@@ -2180,7 +2186,6 @@ $("nav").addEventListener("click",e=>{
   if(b.dataset.m) goView("cars",b.dataset.m);
 });
 $("pageTabs").onclick=e=>{ const b=e.target.closest("[data-m]"); if(b) goView("cars",b.dataset.m); };
-document.addEventListener("click",e=>{ if(e.target.closest("[data-soon]")) showToast("기사님 연락처·정류장 지도·사진은 곧 넣을 예정입니다."); });
 // --- 운영 현황 ---
 function renderHome(){
   const n=riderCount(), tot=SCHOOL_TOTAL, miss=($("rosterCount")||{}).textContent||"0";
@@ -2210,14 +2215,16 @@ function renderCarRoute(){
     return `<button type="button" data-r="${x.run}" class="${x.run===CR.run?"on":""} ${cls}">${x.run}<small>${n}명 / ${cap}석${x.start?" · "+x.start:""}${cls==="full"?(left<=0?" · 만석":" · 거의 만석"):cls==="busy"?" · 혼잡":""}</small></button>`; }).join("");
   const rt=routes.find(x=>x.run===CR.run), kids=runRiders(CR.dir,CR.run);
   const stops=rt.stops.filter(st=>!isVac()||routeCount(CR.dir,st,rt.run)>0);
-  $("crDriver").textContent=`${CR.run.split(" ")[0]} 기사님 · 미등록`;
+  const veh=CR.run.split(" ")[0], dv=INFO.drivers[veh]||{};
+  $("crDriverTxt").innerHTML=dv.name||dv.phone?`<b>${esc(veh)} · ${esc(dv.name||"기사님")}</b><span>${dv.phone?`📞 <a href="tel:${esc(dv.phone.replace(/[^0-9+]/g,""))}">${esc(dv.phone)}</a>`:"연락처 미등록"}${dv.memo?" · "+esc(dv.memo):""}</span>`:`<b>${esc(veh)} 기사님 · 미등록</b><span>🔒 잠금을 풀고 ‘기사님 정보’를 눌러 이름과 연락처를 넣어 주세요</span>`;
   if(!CR.stop||!stops.includes(CR.stop)) CR.stop=stops[0]||null;
   const item=(st,i)=>{ const n=routeCount(CR.dir,st,rt.run), t=stopTime(CR.dir,st,rt.run);
-    return `<li class="stop ${st===CR.stop?"sel":""}" data-s="${esc(st)}"><div class="no">${i+1}</div><div class="sbox"><b>${esc(st)}</b><small>${t?(/예정/.test(t)?`<span class="plan">${esc(t)}</span>`:esc(t)):"시간 미정"} · 📍 지도 미등록 · 📷 사진 없음</small></div><div class="cnt">${n}명</div></li>`; };
+    return `<li class="stop ${st===CR.stop?"sel":""}" data-s="${esc(st)}"><div class="no">${i+1}</div><div class="sbox"><b>${esc(st)}</b><small>${t?(/예정/.test(t)?`<span class="plan">${esc(t)}</span>`:esc(t)):"시간 미정"} · ${(INFO.stops[st]||{}).map?'<span class="ok">📍 지도</span>':"📍 지도 미등록"} · ${(INFO.stops[st]||{}).hasPhoto?'<span class="ok">📷 사진</span>':"📷 사진 없음"}</small></div><div class="cnt">${n}명</div></li>`; };
   const school=`<li class="stop school"><div class="no">🏫</div><div class="sbox"><b>초평초등학교</b><small>${CR.dir==="am"?"도착":(rt.start||"출발")}</small></div><div class="cnt"></div></li>`;
   $("crStops").innerHTML=stops.length?(CR.dir==="pm"?school:"")+stops.map(item).join("")+(CR.dir==="am"?school:""):`<li style="padding:20px;color:var(--muted)">${isVac()?"아직 방학 신청 학생이 없습니다. 신청을 받으면 타는 정류장만 순서대로 나옵니다.":"탈 학생이 없습니다."}</li>`;
   $("crStopName").textContent=CR.stop?`📍 ${CR.stop}`:"📍 정류장";
   const here=kids.filter(k=>k.stop===CR.stop).sort((a,b)=>a.name.localeCompare(b.name,"ko"));
+  renderStopDetail();
   $("crKids").innerHTML=here.length?here.map(k=>`<span>${esc(k.name)} · ${esc(k.g27)}</span>`).join(""):"<span>탈 학생 없음</span>";
 }
 $("crDir").onclick=e=>{ const b=e.target.closest("[data-d]"); if(!b) return; CR.dir=b.dataset.d; CR.run=null; CR.stop=null; renderCarRoute(); };
@@ -2258,6 +2265,48 @@ document.addEventListener("click",e=>{
 });
 { const _r2=render; render=function(){ const o=_r2.apply(this,arguments); if(VIEW==="home") renderHome(); if(VIEW==="cars"&&CAR_MODE==="route") renderCarRoute(); if(VIEW==="survey") renderSurveyView(); return o; };
   const _u2=updateLockUI; updateLockUI=function(){ const o=_u2.apply(this,arguments); document.querySelectorAll("#nav .lk").forEach(e=>e.textContent=editUnlocked?"🔓":"🔒"); if(VIEW==="survey") renderSurveyView(); if(VIEW==="data") renderDataView(); return o; }; }
+
+// ===== 기사님 · 정류장 지도 · 사진 =====
+let INFO={drivers:{},stops:{}}; const PHOTO_CACHE=new Map();
+async function loadInfo(){ try{ INFO=await callServer("getInfo",viewCode)||INFO; PHOTO_CACHE.clear(); if(VIEW==="cars"&&CAR_MODE==="route") renderCarRoute(); }catch(e){} }
+async function renderStopDetail(){
+  const st=CR.stop, si=(st&&INFO.stops[st])||{};
+  $("crStopBtns").innerHTML=st?`${si.map?`<a class="btn" href="${esc(si.map)}" target="_blank" rel="noopener">📍 지도 보기</a>`:`<button class="btn soon" type="button" disabled>📍 지도 미등록</button>`}
+    <button class="btn info-edit" type="button" data-info="photo">📷 사진 ${si.hasPhoto?"바꾸기":"올리기"}</button>
+    <button class="btn info-edit" type="button" data-info="map">🔗 지도 링크</button>
+    ${si.hasPhoto?`<button class="btn info-edit" type="button" data-info="delphoto">🗑 사진 지우기</button>`:""}`:"";
+  const box=$("crPhoto");
+  if(!st||!si.hasPhoto){ box.className="photo"; box.innerHTML=`<div><span>📷</span>정류장 사진 없음<br><small style="font-weight:600">🔒 잠금을 풀고 ‘사진 올리기’로 타는 자리가 보이는 사진을 올려 주세요</small></div>`; return; }
+  box.className="photo has";
+  if(PHOTO_CACHE.has(st)){ box.innerHTML=`<img src="${PHOTO_CACHE.get(st)}" alt="${esc(st)} 정류장 사진">`; return; }
+  box.innerHTML=`<div><span>⏳</span>사진을 불러오는 중…</div>`;
+  try{ const url=await callServer("getStopPhoto",viewCode,st); PHOTO_CACHE.set(st,url); if(CR.stop===st) box.innerHTML=url?`<img src="${url}" alt="${esc(st)} 정류장 사진">`:"사진 없음"; }
+  catch(e){ box.innerHTML=`<div><span>⚠️</span>사진을 불러오지 못했습니다</div>`; }
+}
+$("crPhoto").onclick=e=>{ const img=e.target.closest("img"); if(!img) return; const z=document.createElement("div"); z.className="photo-zoom"; z.innerHTML=`<img src="${img.src}" alt="">`; z.onclick=()=>z.remove(); document.body.appendChild(z); };
+function shrinkImage(file,max=1280){ return new Promise((ok,fail)=>{ const fr=new FileReader(); fr.onload=()=>{ const im=new Image(); im.onload=()=>{ const k=Math.min(1,max/Math.max(im.width,im.height)), c=document.createElement("canvas"); c.width=Math.round(im.width*k); c.height=Math.round(im.height*k); c.getContext("2d").drawImage(im,0,0,c.width,c.height); ok(c.toDataURL("image/jpeg",0.82)); }; im.onerror=fail; im.src=fr.result; }; fr.onerror=fail; fr.readAsDataURL(file); }); }
+$("crStopBtns").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-info]"); if(!b||!editUnlocked) return; const st=CR.stop, si=INFO.stops[st]||{};
+  if(b.dataset.info==="photo") $("crPhotoFile").click();
+  if(b.dataset.info==="map"){ const v=prompt(`${st} 정류장의 지도 링크를 붙여 넣으세요.\n(네이버지도·카카오맵에서 위치를 연 뒤 ‘공유 → 링크 복사’)\n비우고 확인을 누르면 지웁니다.`, si.map||""); if(v===null) return;
+    try{ INFO=await callServer("saveStopInfo",editPw,st,v.trim()); renderCarRoute(); showToast("지도 링크를 저장했습니다."); }catch(err){ showToast("저장하지 못했습니다. 잠금을 다시 풀어 주세요."); } }
+  if(b.dataset.info==="delphoto"){ if(!confirm(`${st} 정류장 사진을 지울까요?`)) return;
+    try{ INFO=await callServer("deleteStopPhoto",editPw,st); PHOTO_CACHE.delete(st); renderCarRoute(); showToast("사진을 지웠습니다."); }catch(err){ showToast("지우지 못했습니다."); } }
+});
+$("crPhotoFile").onchange=async()=>{
+  const f=$("crPhotoFile").files[0]; $("crPhotoFile").value=""; if(!f) return; const st=CR.stop;
+  $("crPhoto").innerHTML=`<div><span>⏳</span>사진을 줄여서 올리는 중…</div>`;
+  try{ const url=await shrinkImage(f); INFO=await callServer("saveStopPhoto",editPw,st,url); PHOTO_CACHE.set(st,url); renderCarRoute(); showToast(`${st} 정류장 사진을 올렸습니다.`); }
+  catch(err){ showToast("사진을 올리지 못했습니다. "+(/Drive|권한|permission/i.test(errText(err))?"Apps Script에서 authorize를 한 번 실행해 주세요.":"잠시 뒤 다시 해 보세요.")); renderStopDetail(); }
+};
+$("crDriverEdit").onclick=async()=>{
+  if(!editUnlocked) return; const veh=CR.run.split(" ")[0], dv=INFO.drivers[veh]||{};
+  const name=prompt(`${veh} 기사님 이름`, dv.name||""); if(name===null) return;
+  const phone=prompt(`${veh} 기사님 연락처 (예: 010-1234-5678)`, dv.phone||""); if(phone===null) return;
+  try{ INFO=await callServer("saveDriver",editPw,veh,name.trim(),phone.trim(),dv.memo&&/예시/.test(dv.memo)?"":(dv.memo||"")); renderCarRoute(); showToast("기사님 정보를 저장했습니다."); }
+  catch(err){ showToast("저장하지 못했습니다. 잠금을 다시 풀어 주세요."); }
+};
+setTimeout(loadInfo,1500);
 applySeason();
 render();
 updateLockUI();
