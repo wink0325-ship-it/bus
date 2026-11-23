@@ -2061,13 +2061,13 @@ function riderCount(){ return DATA.filter(r=>!r.grad && r.use!=="미이용").len
 function renderRideBadge(){
   const el=$("rideBadge"); if(!el) return;
   const n=riderCount(), vac=isVac();
-  el.classList.toggle("editable", !!editUnlocked);
-  if(!SCHOOL_TOTAL){ el.innerHTML=`🚌 탑승 <b>${n}</b>명${editUnlocked?' · <span class="pct">전교생 수 입력</span>':''}`; return; }
-  const nu=DATA.filter(r=>!r.grad&&r.use==="미이용").length;
-  el.innerHTML=`🚌 전교생 ${SCHOOL_TOTAL}명 중 <b>${n}</b>명 탑승 <span class="pct">${Math.round(n/SCHOOL_TOTAL*100)}%</span>${nu?` <small style="font-size:13px;color:var(--muted)">· 미이용 ${nu}명</small>`:""}`;
+  // 등록된 학생(졸업 예정 제외)을 그대로 세어 실시간으로 보여 줌
+  const tot=DATA.filter(r=>!r.grad).length, nu=tot-n;
+  el.classList.remove("editable"); el.title="전교생 = 등하교 + 등교만 + 하교만 + 미이용 (명단에 등록된 학생, 졸업 예정 제외) · 학생을 추가하거나 바꾸면 바로 바뀝니다";
+  el.innerHTML=tot?`🚌 전교생 ${tot}명 중 <b>${n}</b>명 탑승 <span class="pct">${Math.round(n/tot*100)}%</span> <small style="font-size:13px;color:var(--muted)">· 미이용 ${nu}명</small>`:`🚌 등록된 학생이 없습니다`;
 }
 $("rideBadge").onclick=async()=>{
-  if(!editUnlocked) return;
+  return; // 전교생 수 직접 입력은 쓰지 않음 (등록 학생 기준 자동 계산)
   const v=prompt(`${isVac()?"방학 기간":"2027학년도"} 전교생 수를 입력하세요. (유치원 포함)`, SCHOOL_TOTAL||"");
   if(v===null) return; const n=parseInt(v,10); if(!(n>0)) return showToast("숫자로 입력해 주세요.");
   try{ SCHOOL_TOTAL=await callServer("setTotal",editPw,n,SEASON); renderRideBadge(); showToast(`전교생 수를 ${SCHOOL_TOTAL}명으로 저장했습니다.`); }
@@ -2221,7 +2221,7 @@ function renderHome(){
   const busy=document.querySelectorAll("#capAm .run.busy,#capPm .run.busy").length, full=document.querySelectorAll("#capAm .run.full,#capPm .run.full").length;
   const card=(ic,t,v,sub,go)=>`<div class="box stat ${go?"link":""}" ${go?`data-go="${go}"`:""}><div class="ico">${ic}</div><div><small>${t}</small><b>${v}</b><div class="sub3">${sub}</div></div></div>`;
   $("statGrid").innerHTML=[
-    card("👥","탑승 학생",`${n}<span>명</span>`,`명단 ${listN}명 · <a href="#" data-nouse>미이용 ${noUse}명 보기</a>${tot?` · 전교생 ${tot}명 중 ${Math.round(n/tot*100)}%`:""}`,""),
+    card("👥","탑승 학생",`${n}<span>명</span>`,`전교생 ${listN}명 중 ${listN?Math.round(n/listN*100):0}% · <a href="#" data-nouse>미이용 ${noUse}명 보기</a>`,""),
     card("🚌","운행 차량",isVac()?`1<span>대</span>`:`2<span>대</span>`,isVac()?"45인승 · 등교 1회 · 하교 1차":"45인승 · 20인승 · 하루 8회 운행",""),
     card("📝","미응답 학생",`${miss}<span>명</span>`,"설문 관리에서 확인 🔒","survey"),
     card(full?"🚫":"⚠️","혼잡·만석 운행",`${busy+full}<span>회</span>`,(busy+full)?`🔴 거의 만석 ${full}회 · 🟠 혼잡 ${busy}회`:"여유 5석 미만 주황 · 2석 이하 빨강","")
@@ -2279,7 +2279,6 @@ function renderSurveyView(){
 function renderDataView(){
   if(!editUnlocked){ $("v-data").innerHTML=lockWall("자료 관리"); return; }
   $("v-data").innerHTML=`<h3 class="sec">🗂 자료 관리</h3><div class="tiles">
-    ${tile("👥 전교생 수",`${SEASON_INFO[SEASON].label} 전교생 수를 넣으면 ‘전교생 대비 탑승’이 계산됩니다.`,"입력하기","rideBadge",`<span class="num">${SCHOOL_TOTAL?SCHOOL_TOTAL+"명":"미입력"}</span>`)}
     ${tile("👪 학부모 안내 기간","학부모 앱에 학기 중·겨울방학·여름방학 중 어느 노선을 보여 줄지 정합니다. 누를 때마다 다음 기간으로 바뀝니다.","다음 기간으로 바꾸기","parentSeasonBtn",`<span class="num">${SEASON_INFO[PARENT_SEASON].label}</span>`)}
     ${tile("💾 자료 백업","지금 보고 있는 기간의 명단을 파일로 내려받아 보관합니다.","백업 받기","backup")}
     ${tile("📂 백업 불러오기","보관한 백업 파일로 명단을 되돌립니다.","파일 고르기","restore")}
