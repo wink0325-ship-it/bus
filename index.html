@@ -580,6 +580,7 @@ body::before{position:fixed;top:0;left:0;right:0;z-index:40}
 .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .stat{display:flex;align-items:center;gap:14px;cursor:default}
 .stat.link{cursor:pointer}.stat.link:hover{background:var(--hi-l)}
+.app .run{cursor:pointer}.app .run:hover{transform:translate(-1px,-1px)}
 .stat .ico{width:56px;height:56px;border-radius:50%;border:2.5px solid #2A2620;background:var(--hi-l);display:grid;place-items:center;font-size:26px;flex:none}
 .stat small{display:block;color:var(--muted);font-weight:700}
 .stat b{font-family:var(--f-head);font-weight:400;font-size:32px;line-height:1.1}.stat b span{font-family:Pretendard;font-size:15px;font-weight:700;margin-left:2px}
@@ -909,7 +910,7 @@ function uniq(key, order){ const v=[...new Set(DATA.map(r=>r[key]).filter(Boolea
 function fill(sel, label, vals){ sel.innerHTML = `<option value="">${label}: 전체</option>` + vals.map(v=>`<option>${v}</option>`).join(""); }
 fill($("fGrade"),"2027 학년",uniq("g27",GRADE_ORDER));
 fill($("fClass"),"2026 학급",uniq("c26"));
-fill($("fUse"),"이용 구분",["등하교","등교만","하교만"]);
+fill($("fUse"),"이용 구분",["등하교","등교만","하교만","미이용"]);
 fill($("fArea"),"지역",["충북혁신도시","초평면"]);
 function stopList(){ return [...ORDER_STOPS.filter(s=>DATA.some(r=>r.stop===s)), ...uniq("stop").filter(s=>!ORDER_STOPS.includes(s))]; }
 fill($("fStop"),"탑승지",stopList());
@@ -2062,7 +2063,8 @@ function renderRideBadge(){
   const n=riderCount(), vac=isVac();
   el.classList.toggle("editable", !!editUnlocked);
   if(!SCHOOL_TOTAL){ el.innerHTML=`🚌 탑승 <b>${n}</b>명${editUnlocked?' · <span class="pct">전교생 수 입력</span>':''}`; return; }
-  el.innerHTML=`🚌 ${vac?"전교생":"전교생"} ${SCHOOL_TOTAL}명 중 <b>${n}</b>명 탑승 <span class="pct">${Math.round(n/SCHOOL_TOTAL*100)}%</span>`;
+  const nu=DATA.filter(r=>!r.grad&&r.use==="미이용").length;
+  el.innerHTML=`🚌 전교생 ${SCHOOL_TOTAL}명 중 <b>${n}</b>명 탑승 <span class="pct">${Math.round(n/SCHOOL_TOTAL*100)}%</span>${nu?` <small style="font-size:13px;color:var(--muted)">· 미이용 ${nu}명</small>`:""}`;
 }
 $("rideBadge").onclick=async()=>{
   if(!editUnlocked) return;
@@ -2215,10 +2217,11 @@ $("pageTabs").onclick=e=>{ const b=e.target.closest("[data-m]"); if(b) goView("c
 // --- 운영 현황 ---
 function renderHome(){
   const n=riderCount(), tot=SCHOOL_TOTAL, miss=($("rosterCount")||{}).textContent||"0";
+  const listN=DATA.filter(r=>!r.grad).length, noUse=DATA.filter(r=>!r.grad&&r.use==="미이용").length;
   const busy=document.querySelectorAll("#capAm .run.busy,#capPm .run.busy").length, full=document.querySelectorAll("#capAm .run.full,#capPm .run.full").length;
   const card=(ic,t,v,sub,go)=>`<div class="box stat ${go?"link":""}" ${go?`data-go="${go}"`:""}><div class="ico">${ic}</div><div><small>${t}</small><b>${v}</b><div class="sub3">${sub}</div></div></div>`;
   $("statGrid").innerHTML=[
-    card("👥","전교생 대비 탑승",`${n}<span>명</span>`,tot?`전교생 ${tot}명 중 ${Math.round(n/tot*100)}%`:"전교생 수 미입력 (자료 관리)",""),
+    card("👥","탑승 학생",`${n}<span>명</span>`,`명단 ${listN}명 · <a href="#" data-nouse>미이용 ${noUse}명 보기</a>${tot?` · 전교생 ${tot}명 중 ${Math.round(n/tot*100)}%`:""}`,""),
     card("🚌","운행 차량",isVac()?`1<span>대</span>`:`2<span>대</span>`,isVac()?"45인승 · 등교 1회 · 하교 1차":"45인승 · 20인승 · 하루 8회 운행",""),
     card("📝","미응답 학생",`${miss}<span>명</span>`,"설문 관리에서 확인 🔒","survey"),
     card(full?"🚫":"⚠️","혼잡·만석 운행",`${busy+full}<span>회</span>`,(busy+full)?`🔴 거의 만석 ${full}회 · 🟠 혼잡 ${busy}회`:"여유 5석 미만 주황 · 2석 이하 빨강","")
@@ -2231,6 +2234,9 @@ function renderHome(){
     ["최신 자료",($("syncStatus")||{}).textContent||""]
   ].map(([a,b])=>`<li><time>${a}</time><span>${b}</span></li>`).join("");
 }
+$("statGrid").addEventListener("click",e=>{ const a=e.target.closest("[data-nouse]"); if(!a) return; e.preventDefault(); e.stopPropagation();
+  Object.assign(st,{q:"",grade:"",cls:"",use:"미이용",area:"",stop:"",am:"",pm:""}); ["fGrade","fClass","fArea","fStop","fAm","fPm"].forEach(id=>$(id).value=""); $("fUse").value="미이용"; $("q").value="";
+  render(); goView("students"); showToast("통학버스를 이용하지 않는 학생만 보여 줍니다. ‘조건 초기화’를 누르면 전체가 보입니다."); },true);
 $("statGrid").onclick=e=>{ const c=e.target.closest("[data-go]"); if(c){ goView(c.dataset.go); if(!editUnlocked) openLock(null); } };
 // --- 운행 코스 (화면 안) ---
 function runRiders(dir,run){ return DATA.filter(x=>!x.grad && x[dir]===run); }
@@ -2334,6 +2340,16 @@ $("crDriverEdit").onclick=async()=>{
 };
 setTimeout(loadInfo,1500);
 
+// ===== 운영 현황의 버스 카드를 누르면 → 학생 관리에서 그 차 탑승자만 보기 =====
+document.addEventListener("click",e=>{
+  const b=e.target.closest("#capAm .run,#capPm .run"); if(!b) return;
+  const k=b.dataset.key, v=b.dataset.val;
+  setTimeout(()=>{ const on=(k==="am"?st.am:st.pm)===v; if(!on) return; // 다시 눌러 해제한 경우는 그대로
+  if(k==="am"){ st.pm=""; $("fPm").value=""; } else { st.am=""; $("fAm").value=""; }
+  render(); goView("students");
+  const n=DATA.filter(r=>!r.grad&&r[k]===v).length;
+  showToast(`${k==="am"?"등교":"하교"} ${v} 탑승 학생 ${n}명입니다. ‘조건 초기화’를 누르면 전체가 보입니다.`); },0);
+},true);
 // ===== 운행 안내 =====
 let NOTICES=[]; const SEASON_NAME={"전체":"전체","학기":"학기 중","방학":"겨울방학","여름":"여름방학"};
 async function loadNotices(){ try{ NOTICES=await callServer("getNotices",viewCode)||[]; renderNotices(); }catch(e){} }
