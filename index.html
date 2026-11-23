@@ -349,7 +349,13 @@ h2{font-family:var(--f-head);font-weight:400;font-size:19px;margin:0}
 /* 좌석 현황 */
 .cap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .capbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.capgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.capgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.capgrp{border:2.5px solid #2A2620;border-radius:14px;background:var(--hi-l,#FFF4C2);padding:8px}
+.cg-head{display:flex;align-items:baseline;gap:8px;padding:2px 4px 8px}
+.cg-head b{font-family:var(--f-head);font-weight:400;font-size:18px}
+.cg-head span{font-size:12.5px;font-weight:700;color:var(--muted)}
+.cg-head em{margin-left:auto;font-style:normal;font-weight:800;font-size:14px}
+.cg-runs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .run{border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;background:var(--panel);text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;gap:2px}
 .run:hover{border-color:var(--bus)}
 .run.on{outline:2px solid var(--bus);outline-offset:1px}
@@ -946,8 +952,13 @@ function capacity(){
       <span class="state">${left<0?`🚫 만석 · ${-left}명 초과`:left===0?`🚫 만석`:left<=2?`🚫 거의 만석 · 여유 ${left}석`:left<5?`⚠ 혼잡 · 여유 ${left}석`:`여유 ${left}석`}</span></button>`;
   }).join("");
   const vac = typeof SEASON!=="undefined" && SEASON!=="학기";
-  $("capAm").innerHTML = mk(vac?["45인승 1회"]:["45인승 1회","45인승 2회","20인승 1회","20인승 2회"],"am");
-  $("capPm").innerHTML = mk(vac?["45인승 1차"]:["45인승 1차","45인승 2차","20인승 1차","20인승 2차"],"pm");
+  // 회차(시간)별로 묶어서: 그 회차에 가는 45인승 · 20인승을 한 상자에
+  const grp = (title, sub, runs, key) => { const n = act.filter(r=>runs.includes(r[key])).length;
+    return `<div class="capgrp"><div class="cg-head"><b>${title}</b>${sub?`<span>${sub}</span>`:""}<em>${n}명</em></div><div class="cg-runs">${mk(runs,key)}</div></div>`; };
+  $("capAm").innerHTML = vac ? grp("등교","45인승 한 번",["45인승 1회"],"am")
+    : grp("1회 등교","먼저 출발",["45인승 1회","20인승 1회"],"am") + grp("2회 등교","두 번째 출발",["45인승 2회","20인승 2회"],"am");
+  $("capPm").innerHTML = vac ? grp("하교","돌봄 끝난 뒤",["45인승 1차"],"pm")
+    : grp("1차 하교","15:10 출발",["45인승 1차","20인승 1차"],"pm") + grp("2차 하교","16:00 출발",["45인승 2차","20인승 2차"],"pm");
   document.querySelectorAll(".run").forEach(b => b.onclick = () => {
     const k=b.dataset.key, v=b.dataset.val;
     if (k==="am") { st.am = st.am===v ? "" : v; $("fAm").value = st.am; } else { st.pm = st.pm===v ? "" : v; $("fPm").value = st.pm; }
